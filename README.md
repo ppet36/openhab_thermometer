@@ -12,7 +12,7 @@ For powering unit is used cheap DC/DC converter with LM2596 from eBay (previousl
 ### Outdoor part schematic
 ![alt](/eagle/temperature_sensor_sch.png)
 
-Firmware can be programmed from Arduino IDE. For compilation is needed AM library from Adafruit which can be download from https://learn.adafruit.com/dht/downloads. WIFI access point and network parameters can be set in source code. After device started is there available HTTP server which provides measured temperature and humidity values as REST services. Via HTTP server is also available simple configuration page.
+Firmware can be programmed from Arduino IDE. For compilation is needed AM library from Adafruit which can be downloaded from https://learn.adafruit.com/dht/downloads. WIFI access point and network parameters can be set in source code. After device startup is on his IP address available HTTP server which provides measured temperature and humidity values as REST services. Via HTTP server is also available simple configuration page.
 
 PCB boards is designed as single-sided. Indoor part of thermometer is placed in rectangular electrical ducting. For outdoor part i created simple model, which is available in openscad directory.
 
@@ -27,7 +27,7 @@ Finally can be measured values added to your sitemap file:
 Text item=outdoorTemperature
 Text item=outdoorHumidity
 ```
-After successfull configuration is available measured values on OpenHAB page:
+After successfull configuration are available measured values on OpenHAB page:
 ![alt](/images/mobile.jpg)
 
 ## Some project images

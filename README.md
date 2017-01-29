@@ -22,7 +22,7 @@ OpenHAB definition is also very simple. You need to edit your items and sitemap 
 Number outdoorTemperature "Outdoor temperature [%.1f °C]" <temperature> { http="<[http://192.168.128.205/temperature:15000:JS(doublevalue.js)]" }
 Number outdoorHumidity "Outdoor humidity [%.1f %%]" <water> { http="<[http://192.168.128.205/humidity:15000:JS(doublevalue.js)]" }
 ```
-Finally can be measured values added to your sitemap file:
+In short this defines two numbers, which is readed from given URLs every 15 seconds and readed values is converted using script doublevalue.js. Finally can be measured values added to your sitemap file:
 ```    
 Text item=outdoorTemperature
 Text item=outdoorHumidity

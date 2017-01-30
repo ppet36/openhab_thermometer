@@ -12,8 +12,17 @@
 // Pin where is DTH22 connected
 #define DHT_PIN 2
 
+
+// Check URL for WIFI
+#define DEFAULT_CHECK_HOST "192.168.128.100"
+#define DEFAULT_CHECK_PORT 9000
+#define DEFAULT_CHECK_URL  "/rest"
+
 // Frequency of updating temperature/humidity values
 #define DEFAULT_UPDATE_FREQUENCY 5
+
+// Frequency of check whether WiFi is alive
+#define DEFAULT_CHECK_FREQUENCY 60
 
 // Local network definition; must have static IP address
 #define LOCAL_IP IPAddress(192, 168, 128, 205)
@@ -33,7 +42,7 @@
 #define WEB_SERVER_PORT 80
 
 // Magic for detecting empty (unconfigured) EEPROM
-#define MAGIC 0xCB
+#define MAGIC 0xCD
 
 /**
  * EEPROM structure.
@@ -42,6 +51,10 @@ struct OhConfiguration {
   int magic;
   char apName [24];
   char password [48];
+  char checkHost [20];
+  unsigned int checkPort;
+  char checkUrl [50];
+  unsigned int checkFrequency;
   unsigned int updateFrequency;
 };
 
@@ -53,6 +66,9 @@ ESP8266WebServer *server = (ESP8266WebServer *) NULL;
 
 // Last interaction time
 long lastInteractionTime;
+
+// Last check time
+long lastCheckTime;
 
 // Number of communication errors
 int errorCount = 0;
@@ -82,12 +98,17 @@ void setup() {
     updateConfigKey (config.apName, 24, String(DEFAULT_WIFI_AP));
     updateConfigKey (config.password, 48, String(DEFAULT_WIFI_PASSWORD));
     config.updateFrequency = DEFAULT_UPDATE_FREQUENCY;
+    updateConfigKey (config.checkHost, 20, String (DEFAULT_CHECK_HOST));
+    config.checkPort = DEFAULT_CHECK_PORT;
+    updateConfigKey (config.checkUrl, 50, String(DEFAULT_CHECK_URL));
+    config.checkFrequency = DEFAULT_CHECK_FREQUENCY;
   }
 
   reconnectWifi();
   createServer();
 
   lastInteractionTime = millis();
+  lastCheckTime = lastInteractionTime;
 
   // Init interface object
   Serial.println ("Initializing DHT...");
@@ -192,6 +213,10 @@ void wsConfig() {
   resp += "<tr><td>AP SSID:</td><td><input type=\"text\" name=\"apName\" value=\"" + String(config.apName) + "\" maxlength=\"24\"></td><td></td></tr>";
   resp += "<tr><td>AP Password:</td><td><input type=\"password\" name=\"password\" value=\"" + String(config.password) + "\" maxlength=\"48\"></td><td></td></tr>";
   resp += "<tr><td>Update sensor time [sec]:</td><td><input type=\"text\" name=\"updateFrequency\" value=\"" + String(config.updateFrequency) + "\"></td><td></td></tr>";
+  resp += "<tr><td>Check host IP:</td><td><input type=\"text\" name=\"checkHost\" value=\"" + String(config.checkHost) + "\" maxlength=\"20\"></td><td></td></tr>";
+  resp += "<tr><td>Check port:</td><td><input type=\"text\" name=\"checkPort\" value=\"" + String(config.checkPort) + "\" maxlength=\"5\"></td><td></td></tr>";
+  resp += "<tr><td>Check URL:</td><td><input type=\"text\" name=\"checkUrl\" value=\"" + String(config.checkUrl) + "\" maxlength=\"50\"></td><td></td></tr>";
+  resp += "<tr><td>Check frequency [sec]:</td><td><input type=\"text\" name=\"checkFrequency\" value=\"" + String(config.checkFrequency) + "\"></td><td></td></tr>";
 
   resp += "<tr><td colspan=\"3\" align=\"center\"><input type=\"submit\" value=\"Save\"></td></tr>";
   resp += "</table></form>";
@@ -221,11 +246,19 @@ void wsUpdate() {
   String apName = server->arg ("apName");
   String password = server->arg ("password");
   unsigned int updateFrequency = atoi (server->arg ("updateFrequency").c_str());
+  String checkHost = server->arg ("checkHost");
+  unsigned int checkPort = atoi (server->arg ("checkPort").c_str());
+  String checkUrl = server->arg ("checkUrl");
+  unsigned int checkFrequency = atoi (server->arg("checkFrequency").c_str());
   
   if (apName.length() > 1) {
     updateConfigKey (config.apName, 24, apName);
     updateConfigKey (config.password, 48, password);
     config.updateFrequency = constrain (updateFrequency, 1, 600);
+    updateConfigKey (config.checkHost, 20, checkHost);
+    config.checkPort = constrain (checkPort, 1, 65535);
+    updateConfigKey (config.checkUrl, 50, checkUrl);
+    config.checkFrequency = constrain (checkFrequency, 0, 30000);
   
     // store configuration
     EEPROM.begin (sizeof (OhConfiguration));
@@ -237,6 +270,66 @@ void wsUpdate() {
   } else {
     server->send (200, "text/html", "");
   }
+}
+
+/**
+ * Checks WIFI connection by getting check URL.
+*/
+void checkWiFi() {
+  if ((strlen (config.checkHost) < 1) || (config.checkFrequency < 1)) {
+    return;
+  }
+
+  WiFiClient client;
+
+  // connect to OpenHAB
+  Serial.print ("Connecting to http://"); Serial.print (config.checkHost); Serial.print (':'); Serial.print (config.checkPort); Serial.print (config.checkUrl); Serial.print (" ...");
+  if (client.connect (config.checkHost, config.checkPort)) {
+    // send request
+    String req = String("GET ") + config.checkUrl + String (" HTTP/1.1\r\n")
+      + String("Host: ") + String (config.checkHost) + String ("\r\nConnection: close\r\n\r\n");
+    client.print (req);
+    Serial.print (req);
+
+    bool isError = false;
+    
+    // wait HTTP_CONNECT_TIMEOUT for response
+    unsigned long connectStartTime = millis();
+    while (client.available() == 0) {
+      if (millis() - connectStartTime > HTTP_CONNECT_TIMEOUT) {
+        errorCount++;
+        isError = true;
+        break;
+      }
+
+      yield();
+    }
+
+    if (!isError) {
+      Serial.print ("Reading response -> ");
+      
+      // read response lines
+      unsigned long readStartTime = millis();
+
+      int ch;
+      while ((ch = client.read()) != -1) {
+        if (millis() - readStartTime > HTTP_READ_TIMEOUT) {
+          errorCount++;
+          isError = true;
+          break;
+        }
+
+        yield();
+      }
+
+      Serial.println ("OK");
+      
+      client.stop();
+    } else {
+      Serial.println ("ERROR");
+    }
+  }
+  client.stop();
 }
 
 /**
@@ -268,12 +361,20 @@ void loop() {
     }
 
     yield();
+
+    lastInteractionTime = millis();
+  }
+
+  if (millis() - lastCheckTime > config.checkFrequency * 1000L) {
+    yield();
     
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED) {
+      checkWiFi();
+    } else {
       Serial.println ("Wifi not connected!");
       errorCount++;
     }
-    
+
     // when error count reaches ERR_COUNT_FOR_RECONNECT, reconnect WiFi.
     if (errorCount > ERR_COUNT_FOR_RECONNECT) {
       errorCount = 0;
@@ -281,7 +382,7 @@ void loop() {
       createServer();
     }
 
-    lastInteractionTime = millis();
+    lastCheckTime = millis();
   }
 
   yield();

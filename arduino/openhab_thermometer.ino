@@ -283,7 +283,7 @@ void checkWiFi() {
   WiFiClient client;
 
   // connect to OpenHAB
-  Serial.print ("Connecting to http://"); Serial.print (config.checkHost); Serial.print (':'); Serial.print (config.checkPort); Serial.print (config.checkUrl); Serial.print (" ...");
+  Serial.print ("Connecting to http://"); Serial.print (config.checkHost); Serial.print (':'); Serial.print (config.checkPort); Serial.print (config.checkUrl); Serial.println (" ...");
   if (client.connect (config.checkHost, config.checkPort)) {
     // send request
     String req = String("GET ") + config.checkUrl + String (" HTTP/1.1\r\n")
@@ -305,9 +305,8 @@ void checkWiFi() {
       yield();
     }
 
+    Serial.print ("Reading response -> ");
     if (!isError) {
-      Serial.print ("Reading response -> ");
-      
       // read response lines
       unsigned long readStartTime = millis();
 
@@ -327,9 +326,9 @@ void checkWiFi() {
       client.stop();
     } else {
       Serial.println ("ERROR");
+      client.stop();
     }
   }
-  client.stop();
 }
 
 /**
@@ -359,8 +358,6 @@ void loop() {
       Serial.print(lastTemperature);
       Serial.println(" *C ");
     }
-
-    yield();
 
     lastInteractionTime = millis();
   }

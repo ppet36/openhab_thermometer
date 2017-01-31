@@ -4,7 +4,7 @@
 
 This repository contains Cadsoft's Eagle schematic and PCBs as well as Arduino firmware for simple temperature and humidity meter based on ESP8266-01 and AM2302 sensor. Meter is divided into two parts; indoor part with ESP and outdoor part with sensor.
 
-For powering unit is used cheap DC/DC converter with LM2596 from eBay (previously set at 3.3V!!!); in my case is power supply shared with motorized venetian blinds in kitchen; they have 24VDC.
+For powering unit is used cheap DC/DC converter with LM2596 from eBay (previously set to 3.3V!!!); in my case is power supply shared with motorized venetian blinds in kitchen; they have 24VDC. Switching DC/DC converter seems to be overkill, but when voltage drop is too large (in my case around 21V) linear ones generates much heat and thus this converter is economical variant.
 
 ### Indoor part schematic
 ![alt](/eagle/temperature_sch.png)
